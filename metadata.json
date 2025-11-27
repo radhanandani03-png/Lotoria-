@@ -1,0 +1,7 @@
+{
+  "name": "Lotoria Beauty Salon",
+  "description": "Premium beauty services delivered to your home and luxury salon experience in Kanpur.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

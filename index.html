@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lotoria Beauty Salon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Poppins:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              serif: ['"Playfair Display"', 'serif'],
+              sans: ['"Poppins"', 'sans-serif'],
+            },
+            colors: {
+              brand: {
+                gold: '#E11D48', // Changed to Rose-600 (Luxury Red)
+                lightGold: '#FFE4E6', // Changed to Rose-100
+                dark: '#121212',
+                cream: '#FDFBF7',
+                pink: '#FCE7F3',
+                primary: 'var(--primary-color)',
+                secondary: 'var(--secondary-color)',
+              }
+            },
+            backgroundImage: {
+              'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+              'luxury-pattern': "url('https://www.transparenttextures.com/patterns/cream-paper.png')",
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --primary-color: #E11D48; /* Updated to Rose */
+        --secondary-color: #121212;
+      }
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .glass {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+      .glass-dark {
+        background: rgba(18, 18, 18, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(225, 29, 72, 0.2); /* Updated border to Red tint */
+      }
+      .text-shadow {
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.23.0?external=react,react-dom",
+    "lucide-react": "https://esm.sh/lucide-react@0.378.0?external=react",
+    "framer-motion": "https://esm.sh/framer-motion@11.1.7?external=react,react-dom",
+    "qrcode.react": "https://esm.sh/qrcode.react@3.1.0?external=react",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body class="bg-brand-cream text-gray-800">
+    <div id="root"></div>
+  </body>
+</html>
