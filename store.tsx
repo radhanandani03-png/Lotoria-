@@ -1,21 +1,24 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Service, Product, Deal, Review, GalleryItem, User, Booking, ThemeConfig, Coupon, CustomPage, PaymentConfig, ContactInfo, TeamMember, AdminProfile, HomeWidget } from './types';
-
-// Re-importing inside Store to initialize default data
+import { db, auth } from './firebase'; 
 import { 
-  INITIAL_SERVICES as INIT_S, 
-  INITIAL_PRODUCTS as INIT_P, 
-  INITIAL_DEALS as INIT_D, 
-  INITIAL_REVIEWS as INIT_R, 
-  INITIAL_GALLERY as INIT_G,
-  ADMIN_CONTACT
+  collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, setDoc, query, orderBy 
+} from 'firebase/firestore';
+import { 
+  signInWithEmailAndPassword, signOut, onAuthStateChanged 
+} from 'firebase/auth';
+
+// Import Constants for Initial Data Seeding
+import { 
+  INITIAL_SERVICES, INITIAL_PRODUCTS, INITIAL_DEALS, 
+  INITIAL_REVIEWS, INITIAL_GALLERY, ADMIN_CONTACT 
 } from './constants';
 
 interface AppContextType {
   user: User | null;
-  login: (user: User) => void;
+  login: (email: string, pass: string) => Promise<void>;
   logout: () => void;
-  
   users: User[]; 
   
   services: Service[];
@@ -33,211 +36,258 @@ interface AppContextType {
   teamMembers: TeamMember[];
   adminProfile: AdminProfile;
   homeWidgets: HomeWidget[];
+  homeContent: any;
   
-  setServices: (s: Service[]) => void;
+  // Database Actions
+  addService: (s: any) => void;
   updateService: (s: Service) => void;
-  setProducts: (p: Product[]) => void;
+  deleteService: (id: string) => void;
+
+  addProduct: (p: any) => void;
   updateProduct: (p: Product) => void;
-  setDeals: (d: Deal[]) => void;
+  deleteProduct: (id: string) => void;
+
+  addDeal: (d: any) => void;
   updateDeal: (d: Deal) => void;
-  setReviews: (r: Review[]) => void;
-  updateReview: (r: Review) => void; // Added update function
-  setGallery: (g: GalleryItem[]) => void;
-  updateGalleryItem: (g: GalleryItem) => void; 
-  setCoupons: (c: Coupon[]) => void;
-  setCustomPages: (p: CustomPage[]) => void;
+  deleteDeal: (id: string) => void;
+
+  addReview: (r: any) => void;
+  updateReview: (r: Review) => void;
+  deleteReview: (id: string) => void;
+
+  addGalleryItem: (g: any) => void;
+  updateGalleryItem: (g: GalleryItem) => void;
+  deleteGalleryItem: (id: string) => void;
+
+  addCoupon: (c: any) => void;
+  deleteCoupon: (id: string) => void;
+
+  addCustomPage: (p: any) => void;
+  updateCustomPage: (p: CustomPage) => void;
+  deleteCustomPage: (id: string) => void;
+
+  addTeamMember: (t: any) => void;
+  updateTeamMember: (t: TeamMember) => void;
+  deleteTeamMember: (id: string) => void;
+
+  addHomeWidget: (w: any) => void;
+  updateHomeWidget: (w: HomeWidget) => void;
+  deleteHomeWidget: (id: string) => void;
+
+  // Settings Setters
   setTheme: (t: ThemeConfig) => void;
   setPaymentConfig: (p: PaymentConfig) => void;
   setContactInfo: (c: ContactInfo) => void;
-  setTeamMembers: (t: TeamMember[]) => void;
   setAdminProfile: (a: AdminProfile) => void;
-  setHomeWidgets: (w: HomeWidget[]) => void;
-  updateHomeWidget: (w: HomeWidget) => void;
+  updateHomeContent: (c: any) => void;
   
+  // Booking & Cart
   addBooking: (b: Booking) => void;
+  updateBookingStatus: (id: string, status: Booking['status']) => void;
+  sendBookingNotification: (id: string, message: string) => void;
   addToCart: (p: Product) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
-  updateBookingStatus: (id: string, status: Booking['status']) => void;
-  sendBookingNotification: (id: string, message: string) => void;
   
-  // CMS Content
-  homeContent: any;
-  updateHomeContent: (c: any) => void;
+  // Helper
+  uploadInitialData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const DEFAULT_THEME = {
-  primaryColor: '#E11D48', // Updated to Rose
-  secondaryColor: '#121212'
-};
-
-const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
-  acceptCOD: true,
-  acceptOnline: true,
-  acceptCard: true,
-  upiId: 'buyfuturemart@okicici'
-};
-
-const DEFAULT_CONTACT_INFO: ContactInfo = {
-  phone: '8210667364',
-  email: 'buylotoria@gmail.com',
-  address: 'Kanpur, India',
-  social: {
-    facebook: 'https://www.facebook.com/share/1acgbkUrSL/',
-    instagram: 'https://www.instagram.com/_lotoria?igsh=ZnI2bTZocW0zNHow',
-    whatsapp: 'https://whatsapp.com/channel/0029VbBFj097IUYSac2k7O0U'
-  }
-};
-
-const DEFAULT_TEAM: TeamMember[] = [
-  { id: '1', name: 'Aryan Kumar', role: 'Founder & Lead', image: 'https://img.sanishtech.com/u/13a00a495c7c890d5a711a94154d2bf8.jpg', isFounder: true, bio: 'Visionary leader transforming home salon services.' },
-  { id: '2', name: 'Jyoti', role: 'Co-Founder', image: 'https://img.sanishtech.com/u/e1656cab28cdbc64c126a747787c11b4.jpg', isFounder: true, bio: 'Expert in beauty therapy and customer experience.' }
-];
-
-const DEFAULT_HOME_CONTENT = {
-  introTitle: "Only Beauty Rules",
-  introText: "Are you looking for a fresh, new look? Or do you just want your skin to feel amazing? We can help you achieve that natural, healthy glow. Book your appointment with us at Lotoria Beauty Salon.",
-  heroImage: "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&q=80",
-  serviceTitle: "Lotoria Beauty Salon: Professional Beauty Services Delivered to Your Home",
-  serviceText: "Prioritize your comfort and convenience. Lotoria Beauty Salon provides Professional Beauty Services right at your doorstep. Simply book an appointment, and our highly experienced and certified beauticians will arrive at your location ready to serve you.",
-  specializationText: "We specialize in delivering a seamless, hygienic, and premium salon experience in the comfort of your home."
-};
-
-// Helper to load from local storage
-const loadState = (key: string, fallback: any) => {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch (e) {
-    return fallback;
-  }
-};
+const DEFAULT_THEME = { primaryColor: '#E11D48', secondaryColor: '#121212' };
+const DEFAULT_PAYMENT = { acceptCOD: true, acceptOnline: true, acceptCard: true, upiId: 'buyfuturemart@okicici' };
+const DEFAULT_CONTACT = { phone: '8210667364', email: 'buylotoria@gmail.com', address: 'Kanpur, India', social: { facebook: '', instagram: '', whatsapp: '' } };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => loadState('lotoria_user', null));
-  const [users, setUsers] = useState<User[]>(() => loadState('lotoria_users', [])); 
+  // --- STATE ---
+  const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [customPages, setCustomPages] = useState<CustomPage[]>([]);
+  const [homeWidgets, setHomeWidgets] = useState<HomeWidget[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   
-  const [services, setServices] = useState<Service[]>(() => loadState('lotoria_services', INIT_S));
-  const [products, setProducts] = useState<Product[]>(() => loadState('lotoria_products', INIT_P));
-  const [deals, setDeals] = useState<Deal[]>(() => loadState('lotoria_deals', INIT_D));
-  const [reviews, setReviews] = useState<Review[]>(() => loadState('lotoria_reviews', INIT_R));
-  const [gallery, setGallery] = useState<GalleryItem[]>(() => loadState('lotoria_gallery', INIT_G));
-  const [coupons, setCoupons] = useState<Coupon[]>(() => loadState('lotoria_coupons', []));
-  const [bookings, setBookings] = useState<Booking[]>(() => loadState('lotoria_bookings', []));
-  const [customPages, setCustomPages] = useState<CustomPage[]>(() => loadState('lotoria_pages', []));
-  const [theme, setTheme] = useState<ThemeConfig>(() => loadState('lotoria_theme', DEFAULT_THEME));
-  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(() => loadState('lotoria_payment', DEFAULT_PAYMENT_CONFIG));
-  const [cart, setCart] = useState<Product[]>(() => loadState('lotoria_cart', []));
-  const [homeContent, setHomeContent] = useState(() => loadState('lotoria_home_content', DEFAULT_HOME_CONTENT));
-  const [contactInfo, setContactInfo] = useState<ContactInfo>(() => loadState('lotoria_contact', DEFAULT_CONTACT_INFO));
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => loadState('lotoria_team', DEFAULT_TEAM));
-  const [adminProfile, setAdminProfile] = useState<AdminProfile>(() => loadState('lotoria_admin_profile', { mobile: ADMIN_CONTACT.mobile, email: ADMIN_CONTACT.email }));
-  const [homeWidgets, setHomeWidgets] = useState<HomeWidget[]>(() => loadState('lotoria_home_widgets', []));
-
-  // Persist effects
-  useEffect(() => localStorage.setItem('lotoria_user', JSON.stringify(user)), [user]);
-  useEffect(() => localStorage.setItem('lotoria_users', JSON.stringify(users)), [users]);
-  useEffect(() => localStorage.setItem('lotoria_services', JSON.stringify(services)), [services]);
-  useEffect(() => localStorage.setItem('lotoria_products', JSON.stringify(products)), [products]);
-  useEffect(() => localStorage.setItem('lotoria_deals', JSON.stringify(deals)), [deals]);
-  useEffect(() => localStorage.setItem('lotoria_reviews', JSON.stringify(reviews)), [reviews]);
-  useEffect(() => localStorage.setItem('lotoria_gallery', JSON.stringify(gallery)), [gallery]);
-  useEffect(() => localStorage.setItem('lotoria_coupons', JSON.stringify(coupons)), [coupons]);
-  useEffect(() => localStorage.setItem('lotoria_bookings', JSON.stringify(bookings)), [bookings]);
-  useEffect(() => localStorage.setItem('lotoria_pages', JSON.stringify(customPages)), [customPages]);
-  useEffect(() => localStorage.setItem('lotoria_theme', JSON.stringify(theme)), [theme]);
-  useEffect(() => localStorage.setItem('lotoria_payment', JSON.stringify(paymentConfig)), [paymentConfig]);
+  const [theme, setThemeState] = useState<ThemeConfig>(DEFAULT_THEME);
+  const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig>(DEFAULT_PAYMENT);
+  const [contactInfo, setContactInfoState] = useState<ContactInfo>(DEFAULT_CONTACT);
+  const [adminProfile, setAdminProfileState] = useState<AdminProfile>({ mobile: ADMIN_CONTACT.mobile, email: ADMIN_CONTACT.email });
+  const [homeContent, setHomeContentState] = useState<any>({});
+  
+  // Cart remains local for guest users
+  const [cart, setCart] = useState<Product[]>(() => {
+     try { return JSON.parse(localStorage.getItem('lotoria_cart') || '[]'); } catch { return []; }
+  });
   useEffect(() => localStorage.setItem('lotoria_cart', JSON.stringify(cart)), [cart]);
-  useEffect(() => localStorage.setItem('lotoria_home_content', JSON.stringify(homeContent)), [homeContent]);
-  useEffect(() => localStorage.setItem('lotoria_contact', JSON.stringify(contactInfo)), [contactInfo]);
-  useEffect(() => localStorage.setItem('lotoria_team', JSON.stringify(teamMembers)), [teamMembers]);
-  useEffect(() => localStorage.setItem('lotoria_admin_profile', JSON.stringify(adminProfile)), [adminProfile]);
-  useEffect(() => localStorage.setItem('lotoria_home_widgets', JSON.stringify(homeWidgets)), [homeWidgets]);
+
+
+  // --- FIREBASE LISTENERS ---
+  useEffect(() => {
+    // 1. Auth State
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+         const isAdmin = currentUser.email === adminProfile.email; 
+         setUser({
+             id: currentUser.uid,
+             name: currentUser.displayName || 'User',
+             email: currentUser.email || '',
+             mobile: '',
+             address: '',
+             favoriteService: '',
+             isAdmin: isAdmin
+         });
+      } else {
+        setUser(null);
+      }
+    });
+
+    // 2. Collections
+    const unsubServices = onSnapshot(collection(db, "services"), s => setServices(s.docs.map(d => ({...d.data(), id: d.id} as Service))));
+    const unsubProducts = onSnapshot(collection(db, "products"), s => setProducts(s.docs.map(d => ({...d.data(), id: d.id} as Product))));
+    const unsubDeals = onSnapshot(collection(db, "deals"), s => setDeals(s.docs.map(d => ({...d.data(), id: d.id} as Deal))));
+    const unsubBookings = onSnapshot(query(collection(db, "bookings"), orderBy('date', 'desc')), s => setBookings(s.docs.map(d => ({...d.data(), id: d.id} as Booking))));
+    const unsubGallery = onSnapshot(collection(db, "gallery"), s => setGallery(s.docs.map(d => ({...d.data(), id: d.id} as GalleryItem))));
+    const unsubReviews = onSnapshot(collection(db, "reviews"), s => setReviews(s.docs.map(d => ({...d.data(), id: d.id} as Review))));
+    const unsubCoupons = onSnapshot(collection(db, "coupons"), s => setCoupons(s.docs.map(d => ({...d.data(), id: d.id} as Coupon))));
+    const unsubPages = onSnapshot(collection(db, "pages"), s => setCustomPages(s.docs.map(d => ({...d.data(), id: d.id} as CustomPage))));
+    const unsubTeam = onSnapshot(collection(db, "team"), s => setTeamMembers(s.docs.map(d => ({...d.data(), id: d.id} as TeamMember))));
+    const unsubWidgets = onSnapshot(collection(db, "widgets"), s => setHomeWidgets(s.docs.map(d => ({...d.data(), id: d.id} as HomeWidget))));
+    const unsubUsers = onSnapshot(collection(db, "users"), s => setUsers(s.docs.map(d => ({...d.data(), id: d.id} as User))));
+
+    // 3. Single Documents (Settings)
+    const unsubSettings = onSnapshot(collection(db, "settings"), (snap) => {
+        snap.forEach(doc => {
+            if(doc.id === 'theme') setThemeState(doc.data() as ThemeConfig);
+            if(doc.id === 'payment') setPaymentConfigState(doc.data() as PaymentConfig);
+            if(doc.id === 'contact') setContactInfoState(doc.data() as ContactInfo);
+            if(doc.id === 'admin') setAdminProfileState(doc.data() as AdminProfile);
+            if(doc.id === 'homeContent') setHomeContentState(doc.data());
+        });
+    });
+
+    return () => {
+        unsubAuth(); unsubServices(); unsubProducts(); unsubDeals(); unsubBookings();
+        unsubGallery(); unsubReviews(); unsubCoupons(); unsubPages(); unsubTeam(); unsubWidgets(); unsubSettings(); unsubUsers();
+    };
+  }, []);
+
+  // --- ACTIONS ---
+
+  const login = async (email: string, pass: string) => {
+      await signInWithEmailAndPassword(auth, email, pass);
+  };
+  const logout = () => signOut(auth);
+
+  // Generic DB Helpers
+  const add = (c: string, d: any) => addDoc(collection(db, c), d);
+  const upd = (c: string, id: string, d: any) => updateDoc(doc(db, c, id), d);
+  const del = (c: string, id: string) => deleteDoc(doc(db, c, id));
+  const set = (c: string, id: string, d: any) => setDoc(doc(db, c, id), d, { merge: true });
+
+  // Exposing Actions
+  const addService = (d: any) => add("services", d);
+  const updateService = (d: Service) => upd("services", d.id, d);
+  const deleteService = (id: string) => del("services", id);
+
+  const addProduct = (d: any) => add("products", d);
+  const updateProduct = (d: Product) => upd("products", d.id, d);
+  const deleteProduct = (id: string) => del("products", id);
+
+  const addDeal = (d: any) => add("deals", d);
+  const updateDeal = (d: Deal) => upd("deals", d.id, d);
+  const deleteDeal = (id: string) => del("deals", id);
+
+  const addReview = (d: any) => add("reviews", d);
+  const updateReview = (d: Review) => upd("reviews", d.id, d);
+  const deleteReview = (id: string) => del("reviews", id);
+
+  const addGalleryItem = (d: any) => add("gallery", d);
+  const updateGalleryItem = (d: GalleryItem) => upd("gallery", d.id, d);
+  const deleteGalleryItem = (id: string) => del("gallery", id);
+
+  const addCoupon = (d: any) => add("coupons", d);
+  const deleteCoupon = (id: string) => del("coupons", id);
+
+  const addCustomPage = (d: any) => add("pages", d);
+  const updateCustomPage = (d: CustomPage) => upd("pages", d.id, d);
+  const deleteCustomPage = (id: string) => del("pages", id);
+
+  const addTeamMember = (d: any) => add("team", d);
+  const updateTeamMember = (d: TeamMember) => upd("team", d.id, d);
+  const deleteTeamMember = (id: string) => del("team", id);
+
+  const addHomeWidget = (d: any) => add("widgets", d);
+  const updateHomeWidget = (d: HomeWidget) => upd("widgets", d.id, d);
+  const deleteHomeWidget = (id: string) => del("widgets", id);
+
+  // Settings
+  const setTheme = (t: ThemeConfig) => set("settings", "theme", t);
+  const setPaymentConfig = (p: PaymentConfig) => set("settings", "payment", p);
+  const setContactInfo = (c: ContactInfo) => set("settings", "contact", c);
+  const setAdminProfile = (a: AdminProfile) => set("settings", "admin", a);
+  const updateHomeContent = (c: any) => set("settings", "homeContent", c);
+
+  // Bookings
+  const addBooking = (b: Booking) => add("bookings", b);
+  const updateBookingStatus = (id: string, s: string) => upd("bookings", id, { status: s });
+  const sendBookingNotification = (id: string, m: string) => upd("bookings", id, { adminNotification: m });
+
+  // Cart
+  const addToCart = (p: Product) => setCart([...cart, p]);
+  const removeFromCart = (i: number) => setCart(cart.filter((_, idx) => idx !== i));
+  const clearCart = () => setCart([]);
+
+  // Data Seeder
+  const uploadInitialData = async () => {
+    // Only use this once to populate empty DB
+    const batchPromises = [];
+    INITIAL_SERVICES.forEach(i => batchPromises.push(add("services", i)));
+    INITIAL_PRODUCTS.forEach(i => batchPromises.push(add("products", i)));
+    INITIAL_DEALS.forEach(i => batchPromises.push(add("deals", i)));
+    INITIAL_REVIEWS.forEach(i => batchPromises.push(add("reviews", i)));
+    INITIAL_GALLERY.forEach(i => batchPromises.push(add("gallery", i)));
+    
+    // Default Settings
+    batchPromises.push(set("settings", "theme", DEFAULT_THEME));
+    batchPromises.push(set("settings", "payment", DEFAULT_PAYMENT));
+    batchPromises.push(set("settings", "contact", DEFAULT_CONTACT));
+    batchPromises.push(set("settings", "admin", { mobile: ADMIN_CONTACT.mobile, email: ADMIN_CONTACT.email }));
+
+    await Promise.all(batchPromises);
+    alert("Database Seeded Successfully! Refresh Page.");
+  };
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-color', theme.primaryColor);
     document.documentElement.style.setProperty('--secondary-color', theme.secondaryColor);
   }, [theme]);
 
-  const login = (userData: User) => {
-    setUser(userData);
-    if (!userData.isAdmin) {
-      setUsers(prev => {
-        const exists = prev.find(u => u.mobile === userData.mobile);
-        if (!exists) return [...prev, { ...userData, id: Date.now().toString() }];
-        return prev;
-      });
-    }
-  };
-  
-  const logout = () => setUser(null);
-
-  const addBooking = (booking: Booking) => {
-    setBookings(prev => [booking, ...prev]);
-  };
-
-  const updateBookingStatus = (id: string, status: Booking['status']) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
-  };
-
-  const sendBookingNotification = (id: string, message: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, adminNotification: message } : b));
-  };
-
-  const updateService = (updated: Service) => {
-    setServices(prev => prev.map(item => item.id === updated.id ? updated : item));
-  };
-
-  const updateProduct = (updated: Product) => {
-    setProducts(prev => prev.map(item => item.id === updated.id ? updated : item));
-  };
-
-  const updateDeal = (updated: Deal) => {
-    setDeals(prev => prev.map(item => item.id === updated.id ? updated : item));
-  };
-  
-  const updateGalleryItem = (updated: GalleryItem) => {
-    setGallery(prev => prev.map(item => item.id === updated.id ? updated : item));
-  };
-
-  const updateReview = (updated: Review) => {
-    setReviews(prev => prev.map(item => item.id === updated.id ? updated : item));
-  };
-
-  const updateHomeWidget = (updated: HomeWidget) => {
-    setHomeWidgets(prev => prev.map(item => item.id === updated.id ? updated : item));
-  };
-
-  const addToCart = (product: Product) => setCart(prev => [...prev, product]);
-  
-  const removeFromCart = (indexToRemove: number) => {
-    setCart(prev => prev.filter((_, index) => index !== indexToRemove));
-  };
-  
-  const clearCart = () => setCart([]);
-  const updateHomeContent = (content: any) => setHomeContent(content);
-
   return (
     <AppContext.Provider value={{
       user, login, logout, users,
-      services, setServices, updateService,
-      products, setProducts, updateProduct,
-      deals, setDeals, updateDeal,
-      reviews, setReviews, updateReview,
-      gallery, setGallery, updateGalleryItem,
-      coupons, setCoupons,
-      customPages, setCustomPages,
+      services, addService, updateService, deleteService,
+      products, addProduct, updateProduct, deleteProduct,
+      deals, addDeal, updateDeal, deleteDeal,
+      reviews, addReview, updateReview, deleteReview,
+      gallery, addGalleryItem, updateGalleryItem, deleteGalleryItem,
+      coupons, addCoupon, deleteCoupon,
+      customPages, addCustomPage, updateCustomPage, deleteCustomPage,
       bookings, addBooking, updateBookingStatus, sendBookingNotification,
       theme, setTheme,
       paymentConfig, setPaymentConfig,
       contactInfo, setContactInfo,
-      teamMembers, setTeamMembers,
+      teamMembers, addTeamMember, updateTeamMember, deleteTeamMember,
       adminProfile, setAdminProfile,
       cart, addToCart, removeFromCart, clearCart,
       homeContent, updateHomeContent,
-      homeWidgets, setHomeWidgets, updateHomeWidget
+      homeWidgets, addHomeWidget, updateHomeWidget, deleteHomeWidget,
+      uploadInitialData
     }}>
       {children}
     </AppContext.Provider>
